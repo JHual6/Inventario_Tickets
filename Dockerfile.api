@@ -1,0 +1,10 @@
+FROM node:24-bookworm-slim
+
+WORKDIR /app
+
+COPY api-hcdl/package.json api-hcdl/package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY api-hcdl/*.mjs ./
+
+CMD ["node", "index.mjs"]
