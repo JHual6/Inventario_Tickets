@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 const derivar = promisify(scrypt);
 const parametros = { N: 131072, r: 8, p: 1, maxmem: 192 * 1024 * 1024 };
 const maxEdad = 8 * 3600;
+const edadPrimerAcceso = 15 * 60;
 const ventana = 15 * 60_000;
 const cookie = "hcdl_local";
 const textoInvalido = "Correo o contraseña incorrectos.";
@@ -12,7 +13,8 @@ const huella = (token) => createHash("sha256").update("local:" + token).digest("
 export const cuentasActivas = `
   SELECT c.id, c.rol, c.contrasena_hash, coalesce(u.nombre, t.nombre) AS nombre,
          coalesce(u.correo, t.correo) AS correo,
-         c.usuario_id AS "usuarioId", c.tecnico_id AS "tecnicoId"
+         c.usuario_id AS "usuarioId", c.tecnico_id AS "tecnicoId",
+         (c.rol = 'solicitante' AND c.cambio_inicial_pendiente) AS "cambioClavePendiente"
   FROM cuenta c
   LEFT JOIN usuario u ON u.id = c.usuario_id
   LEFT JOIN tecnico t ON t.id = c.tecnico_id
@@ -28,6 +30,16 @@ export async function hashClave(clave) {
   const hash = await derivar(clave, sal, 64, parametros);
   return `scrypt-v1:${sal.toString("hex")}:${hash.toString("hex")}`;
 }
+
+export function claveValida(contrasena) {
+  if (typeof contrasena !== "string") return false;
+  const longitud = Array.from(contrasena).length;
+  return longitud >= 15 && longitud <= 128 &&
+    /\p{Ll}/u.test(contrasena) && /\p{Lu}/u.test(contrasena) &&
+    /\p{Nd}/u.test(contrasena) && /[\p{S}\p{P}]/u.test(contrasena);
+}
+
+export const requisitosClave = "La contraseña debe tener entre 15 y 128 caracteres, minúscula, mayúscula, número y símbolo.";
 
 // La llamada debe ejecutarse dentro de una transacción.
 export async function actualizarClaveCuenta(db, id, hash) {
@@ -86,16 +98,23 @@ export function crearAutenticacion(db, origen) {
   let verificaciones = 0;
   const cabeceraCookie = (token, edad) => `${cookie}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${edad}${origen.protocol === "https:" ? "; Secure" : ""}`;
 
-  async function sesion(req) {
-    const token = tokenSesion(req);
+  async function leerSesion(token) {
     if (!token) return null;
     const { rows } = await db.query(`
       WITH cuentas AS (${cuentasActivas})
-      SELECT c.id, c.rol, c.nombre, c.correo, c."usuarioId", c."tecnicoId"
+      SELECT c.id, c.rol, c.nombre, c.correo, c."usuarioId", c."tecnicoId",
+             c."cambioClavePendiente", c.contrasena_hash
       FROM sesion_cuenta s JOIN cuentas c ON c.id = s.cuenta_id
       WHERE s.huella = $1 AND s.vence_en > now() AND c.contrasena_hash IS NOT NULL
     `, [huella(token)]);
     return rows[0] ?? null;
+  }
+
+  async function sesion(req) {
+    const registro = await leerSesion(tokenSesion(req));
+    if (!registro) return null;
+    const { contrasena_hash: _hash, ...cuenta } = registro;
+    return cuenta;
   }
 
   async function iniciar(req, res, _url, responder) {
@@ -139,6 +158,7 @@ export function crearAutenticacion(db, origen) {
       }
       const token = randomBytes(32).toString("base64url");
       const anterior = tokenSesion(req);
+      const edad = cuenta.cambioClavePendiente ? edadPrimerAcceso : maxEdad;
       const cliente = await db.connect();
       try {
         await cliente.query("BEGIN");
@@ -146,7 +166,7 @@ export function crearAutenticacion(db, origen) {
           INSERT INTO sesion_cuenta (huella, cuenta_id, vence_en)
           SELECT $1, id, now() + $3::integer * interval '1 second'
           FROM cuenta WHERE id = $2 AND activa AND contrasena_hash = $4 FOR UPDATE
-        `, [huella(token), cuenta.id, maxEdad, cuenta.contrasena_hash]);
+        `, [huella(token), cuenta.id, edad, cuenta.contrasena_hash]);
         if (rowCount !== 1) {
           await cliente.query("ROLLBACK");
           return responder(401, { error: textoInvalido });
@@ -161,7 +181,62 @@ export function crearAutenticacion(db, origen) {
         cliente.release();
       }
       intentos.delete(`cuenta:${correo}`);
-      res.setHeader("Set-Cookie", cabeceraCookie(token, maxEdad));
+      res.setHeader("Set-Cookie", cabeceraCookie(token, edad));
+      return responder(200, { estado: "ok" });
+    } finally {
+      verificaciones--;
+    }
+  }
+
+  async function cambiarClaveInicial(req, res, _url, responder) {
+    if (req.headers.origin !== origen.origin) return responder(403, { error: "Origen no autorizado." });
+    const token = tokenSesion(req);
+    const cuenta = await leerSesion(token);
+    if (!cuenta) return responder(401, { error: "Vuelve a iniciar sesión para cambiar tu contraseña." });
+    if (!cuenta.cambioClavePendiente) return responder(403, { error: "Tu cuenta no tiene un cambio inicial pendiente." });
+    const datos = await leerJson(req, res, responder, 4096);
+    if (!datos) return;
+    const { contrasena, confirmacion } = datos;
+    if (contrasena !== confirmacion) return responder(400, { error: "Las contraseñas deben coincidir." });
+    if (!claveValida(contrasena)) return responder(400, { error: requisitosClave });
+    if (verificaciones >= 2) return responder(429, { error: "Hay demasiadas solicitudes. Intenta nuevamente en unos minutos." });
+    verificaciones++;
+    try {
+      if (await coincide(contrasena, cuenta.contrasena_hash)) {
+        return responder(400, { error: "Elige una contraseña distinta de la temporal." });
+      }
+      const hash = await hashClave(contrasena);
+      const nuevoToken = randomBytes(32).toString("base64url");
+      const cliente = await db.connect();
+      try {
+        await cliente.query("BEGIN");
+        const { rowCount } = await cliente.query(`
+          UPDATE cuenta c SET contrasena_hash=$1, cambio_inicial_pendiente=false
+          FROM usuario u
+          WHERE c.id=$2 AND c.usuario_id=u.id AND u.activo
+            AND c.activa AND c.rol='solicitante' AND c.cambio_inicial_pendiente
+            AND c.contrasena_hash=$3 AND EXISTS (
+              SELECT 1 FROM sesion_cuenta s
+              WHERE s.cuenta_id=c.id AND s.huella=$4 AND s.vence_en>now()
+            )
+        `, [hash, cuenta.id, cuenta.contrasena_hash, huella(token)]);
+        if (rowCount !== 1) {
+          await cliente.query("ROLLBACK");
+          return responder(401, { error: "La sesión cambió o expiró. Vuelve a iniciar sesión." });
+        }
+        await cliente.query("DELETE FROM sesion_cuenta WHERE cuenta_id=$1", [cuenta.id]);
+        await cliente.query(`
+          INSERT INTO sesion_cuenta(huella, cuenta_id, vence_en)
+          VALUES($1,$2,now() + $3::integer * interval '1 second')
+        `, [huella(nuevoToken), cuenta.id, maxEdad]);
+        await cliente.query("COMMIT");
+      } catch (error) {
+        await cliente.query("ROLLBACK");
+        throw error;
+      } finally {
+        cliente.release();
+      }
+      res.setHeader("Set-Cookie", cabeceraCookie(nuevoToken, maxEdad));
       return responder(200, { estado: "ok" });
     } finally {
       verificaciones--;
@@ -182,6 +257,7 @@ export function crearAutenticacion(db, origen) {
     rutas: new Map([
       ["/auth/login", { metodo: "POST", ejecutar: iniciar }],
       ["/auth/logout", { metodo: "POST", ejecutar: salir }],
+      ["/auth/cambiar-clave-inicial", { metodo: "POST", ejecutar: cambiarClaveInicial }],
     ]),
   };
 }

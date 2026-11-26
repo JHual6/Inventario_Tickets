@@ -5,7 +5,7 @@ type Contexto = { params: Promise<{ ruta: string[] }> };
 
 async function reenviar(req: Request, { params }: Contexto) {
   const ruta = (await params).ruta.join("/");
-  const autenticacion = ruta === "login" || ruta === "logout";
+  const autenticacion = ["login", "logout", "cambiar-clave-inicial"].includes(ruta);
   if (!autenticacion && !rutas.test(ruta)) {
     return Response.json({ error: "Ruta no encontrada." }, { status: 404 });
   }

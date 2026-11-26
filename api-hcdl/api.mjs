@@ -186,10 +186,10 @@ export function crearApi(db, auth) {
       if (rutaAuth) return await rutaAuth.ejecutar(req, res, url, responder);
       if (salud) {
         const { rows } = await db.query(
-          "SELECT version FROM hcdl_migracion WHERE version = $1", ["004-acceso-local"],
+          "SELECT version FROM hcdl_migracion WHERE version = $1", ["005-primer-acceso"],
         );
         if (!rows.length) {
-          return responder(503, { error: "La base requiere la migración 004-acceso-local de HCDL." });
+          return responder(503, { error: "La base requiere la migración 005-primer-acceso de HCDL." });
         }
         return responder(200, { estado: "ok" });
       }
@@ -197,6 +197,9 @@ export function crearApi(db, auth) {
       const cuenta = await auth.sesion(req);
       if (!cuenta) return responder(401, { error: "Inicia sesión para continuar." });
       if (perfil) return responder(200, cuenta);
+      if (cuenta.cambioClavePendiente) {
+        return responder(403, { error: "Cambia la contraseña temporal para continuar." });
+      }
       if (gestion) {
         if (cuenta.rol === "solicitante" || (req.method === "POST" && !auth.mismoOrigen(req))) {
           return responder(403, { error: "Esta operación es exclusiva de TI." });

@@ -79,11 +79,13 @@ function coincide(ruta: string) {
     setMenuAbiertoEn(null);
   }
 
+  const primeraActiva = colaborador && coincide(enlaces[0].base);
+  const ultimaActiva = coincide(enlaces[enlaces.length - 1].base);
   const estiloEnlace =
     "flex items-center justify-center px-4 text-sm font-medium " +
     "transition-colors hover:bg-accent hover:text-ink " +
     "focus-visible:outline-2 focus-visible:-outline-offset-4 " +
-    "focus-visible:outline-surface";
+    "focus-visible:outline-surface lg:focus-visible:bg-accent lg:focus-visible:text-ink";
 
   return (
     <header
@@ -95,7 +97,7 @@ function coincide(ruta: string) {
       <div className="bg-brand text-surface">
         <div className="hcdl-barra flex h-[60px] items-center">
           {/* Archivo: public/logo.png */}
-          <div className="hcdl-extremo-inicio flex h-full shrink-0 items-center px-3 transition-colors">
+          <div className={`hcdl-extremo-inicio flex h-full shrink-0 items-center px-3 transition-colors ${primeraActiva ? "" : ""}`}>
             <Link
               href="/"
               onClick={cerrarMenu}
@@ -117,25 +119,26 @@ function coincide(ruta: string) {
             aria-label="Navegación principal"
             className="hidden h-full min-w-0 flex-1 items-stretch lg:flex"
           >
-            {enlaces.map((enlace) => (
-            <Link
-              key={enlace.href}
-              href={enlace.href}
-              aria-current={coincide(enlace.base) ? "page" : undefined}
-              className={`${estiloEnlace} flex-1 whitespace-nowrap ${
-                enlace.base === "/dashboard"
-                  ? "hcdl-dashboard"
-                  : enlace.base === "/administracion"
-                    ? `hcdl-administracion ${coincide(enlace.base) ? "bg-accent text-ink" : ""}`
-                    : colaborador && coincide(enlace.base) ? "bg-brand-dark" : ""
-              }`}
-            >
-              {enlace.nombre}
-            </Link>
-            ))}
+            {enlaces.map((enlace, indice) => {
+              const activo = coincide(enlace.base);
+              const primero = indice === 0;
+              const ultimo = indice === enlaces.length - 1;
+              return (
+                <Link
+                  key={enlace.href}
+                  href={enlace.href}
+                  aria-current={activo ? "page" : undefined}
+                  className={`${estiloEnlace} flex-1 whitespace-nowrap
+                    ${primero ? "hcdl-enlace-inicio" : ""} ${ultimo ? "hcdl-enlace-final" : ""}
+                    ${activo && (colaborador || ultimo) ? "" : ""}`}
+                >
+                  {enlace.nombre}
+                </Link>
+              );
+            })}
           </nav>
 
-          <div className={`hcdl-extremo-final ml-auto flex h-full shrink-0 items-center gap-3 px-3 transition-colors ${coincide("/administracion") ? "bg-accent" : ""}`}>
+          <div className={`hcdl-extremo-final ml-auto flex h-full shrink-0 items-center gap-3 px-3 transition-colors ${ultimaActiva ? (colaborador ? "" : "bg-accent") : ""}`}>
             <CerrarSesion soloIcono />
 
             {/* Botón de menú móvil */}

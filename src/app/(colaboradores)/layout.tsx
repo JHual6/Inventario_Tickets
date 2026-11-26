@@ -6,7 +6,7 @@ import { inicio, obtenerSesion } from "@/lib/sesion-hcdl";
 export default async function LayoutColaboradores({ children }: { children: ReactNode }) {
   const sesion = await obtenerSesion();
   if (!sesion) redirect("/acceso");
-  if (sesion.rol !== "solicitante") redirect(inicio(sesion.rol));
+  if (sesion.cambioClavePendiente || sesion.rol !== "solicitante") redirect(inicio(sesion));
 
   return (
     <>

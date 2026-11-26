@@ -1,4 +1,4 @@
-import { actualizarClaveCuenta, hashClave, leerJson } from "./acceso.mjs";
+import { actualizarClaveCuenta, claveValida, hashClave, leerJson, requisitosClave } from "./acceso.mjs";
 
 const categorias = new Set(["equipo", "movil", "periferico", "impresora", "iot"]);
 const idValido = (id) => Number.isInteger(id) && id > 0 && id <= 2147483647;
@@ -11,21 +11,6 @@ const clavesFicha = [
   "ubicacion", "urlWeb",
 ];
 const clavesSecretas = "ARRAY['password','contrasena','contraseña','passwordWeb','contrasenaWeb','claveWeb']";
-
-function validarVisibilidadInicial(id, visible) {
-  exigir(id != null || visible === undefined || typeof visible === "boolean",
-    "Selecciona una visibilidad inicial válida.");
-}
-
-function claveValida(contrasena) {
-  if (typeof contrasena !== "string") return false;
-  const longitud = Array.from(contrasena).length;
-  return longitud >= 15 && longitud <= 128 &&
-    /\p{Ll}/u.test(contrasena) && /\p{Lu}/u.test(contrasena) &&
-    /\p{Nd}/u.test(contrasena) && /[\p{S}\p{P}]/u.test(contrasena);
-}
-
-const requisitosClave = "La contraseña debe tener entre 15 y 128 caracteres, minúscula, mayúscula, número y símbolo.";
 
 export async function catalogoTI(db, responder) {
   const { rows: [datos] } = await db.query(`
@@ -103,10 +88,9 @@ async function guardarRecursos(db, _cuenta, entrada) {
 
   for (const r of lote) {
     const previo = anteriores.get(r.id);
-    validarVisibilidadInicial(r.id, r.visible);
     const nombre = texto(r.nombre);
     const tipo = texto(r.tipo);
-    const estado = texto(r.estado);
+    const estado = previo ? texto(r.estado) : r.categoria === "impresora" ? "Activa" : "Disponible";
     const serie = texto(r.serie) || null;
     const marca = texto(r.marca) || null;
     const sectorId = r.sectorId === undefined ? previo?.sector_id ?? null : r.sectorId;
@@ -139,18 +123,18 @@ async function guardarRecursos(db, _cuenta, entrada) {
           'revision', to_char(now() AT TIME ZONE 'America/Santiago', 'YYYY-MM-DD')
         ) ELSE '{}'::jsonb END) WHERE id=$8`, [...valores, previo.id]);
     } else {
-      await db.query(`INSERT INTO recurso(nombre,tipo,marca,serie,estado,sector_id,ficha,categoria,visible)
+      await db.query(`INSERT INTO recurso(nombre,tipo,marca,serie,estado,sector_id,ficha,categoria)
         VALUES($1,$2,$3,$4,$5,$6,jsonb_strip_nulls($7::jsonb || CASE WHEN $8='equipo' THEN jsonb_build_object(
           'revision', to_char(now() AT TIME ZONE 'America/Santiago', 'YYYY-MM-DD')
-        ) ELSE '{}'::jsonb END),$8,$9)`, [...valores, r.categoria, r.visible ?? true]);
+        ) ELSE '{}'::jsonb END),$8)`, [...valores, r.categoria]);
     }
   }
 }
 
-async function guardarUsuario(db, cuenta, { id, nombre, cargo, correo, sectorId, activo, visible, contrasena }) {
-  validarVisibilidadInicial(id, visible);
+async function guardarUsuario(db, cuenta, { id, nombre, cargo, correo, sectorId, activo, contrasena }) {
   const campos = [texto(nombre), texto(cargo), texto(correo).toLowerCase()];
-  exigir(campos[0] && campos.every((v) => v.length <= 254) && typeof activo === "boolean", "Revisa los datos del usuario.");
+  exigir(campos[0] && campos.every((v) => v.length <= 254) && (id == null || typeof activo === "boolean"),
+    "Revisa los datos del usuario.");
   exigir(!campos[2] || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(campos[2]), "Ingresa un correo válido.");
   if (contrasena !== undefined) {
     exigir(cuenta.rol === "administrador", "Solo un administrador puede establecer la contraseña inicial.", 403);
@@ -162,22 +146,23 @@ async function guardarUsuario(db, cuenta, { id, nombre, cargo, correo, sectorId,
     exigir(!rowCount, "Ese correo pertenece a una cuenta de TI.", 409);
   }
   await sectorValido(db, sectorId);
-  const valores = [campos[0], campos[1] || null, campos[2] || null, sectorId, activo];
+  const valores = [campos[0], campos[1] || null, campos[2] || null, sectorId];
   if (id != null) {
     await buscarRegistro(db, "usuario", id);
-    await db.query("UPDATE usuario SET nombre=$1,cargo=$2,correo=$3,sector_id=$4,activo=$5 WHERE id=$6", [...valores, id]);
+    await db.query("UPDATE usuario SET nombre=$1,cargo=$2,correo=$3,sector_id=$4,activo=$5 WHERE id=$6", [...valores, activo, id]);
   } else {
     const { rows: [usuario] } = await db.query(
-      "INSERT INTO usuario(nombre,cargo,correo,sector_id,activo,visible) VALUES($1,$2,$3,$4,$5,$6) RETURNING id",
-      [...valores, visible ?? true],
+      "INSERT INTO usuario(nombre,cargo,correo,sector_id) VALUES($1,$2,$3,$4) RETURNING id", valores,
     );
-    await db.query("INSERT INTO cuenta(usuario_id,rol,activa,contrasena_hash) VALUES($1,'solicitante',true,$2)",
+    await db.query(`
+      INSERT INTO cuenta(usuario_id,rol,activa,contrasena_hash,cambio_inicial_pendiente)
+      VALUES($1,'solicitante',true,$2,true)
+    `,
       [usuario.id, contrasena === undefined ? null : await hashClave(contrasena)]);
   }
 }
 
-async function guardarSuministro(db, cuenta, { id, nombre, marca, tipo, descripcion, stockMinimo, stock, visible }) {
-  validarVisibilidadInicial(id, visible);
+async function guardarSuministro(db, cuenta, { id, nombre, marca, tipo, descripcion, stockMinimo, stock }) {
   nombre = texto(nombre);
   marca = texto(marca);
   descripcion = texto(descripcion);
@@ -190,8 +175,8 @@ async function guardarSuministro(db, cuenta, { id, nombre, marca, tipo, descripc
       [...valores, id]);
   } else {
     exigir(cantidadValida(stock), "Ingresa un stock inicial válido.");
-    const { rows: [suministro] } = await db.query(`INSERT INTO suministro(nombre,marca,tipo,descripcion,stock_minimo,visible)
-      VALUES($1,$2,$3,$4,$5,$6) RETURNING id`, [...valores, visible ?? true]);
+    const { rows: [suministro] } = await db.query(`INSERT INTO suministro(nombre,marca,tipo,descripcion,stock_minimo)
+      VALUES($1,$2,$3,$4,$5) RETURNING id`, valores);
     if (stock) await agregarStock(db, cuenta, { id: suministro.id, cantidad: stock, motivo: "Stock inicial" });
   }
 }

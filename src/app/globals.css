@@ -59,13 +59,11 @@ body {
 }
 /* Mismo breakpoint que lg:flex y lg:hidden del Header. */
 @media (min-width: 1024px) {
-  .hcdl-barra:has(.hcdl-dashboard:hover) .hcdl-extremo-inicio,
-  .hcdl-barra:has(.hcdl-dashboard:focus-visible) .hcdl-extremo-inicio {
+  .hcdl-barra:has(.hcdl-enlace-inicio:is(:hover, :focus-visible)) .hcdl-extremo-inicio {
     background-color: var(--hcdl-orange);
   }
 
-  .hcdl-barra:has(.hcdl-administracion:hover) .hcdl-extremo-final,
-  .hcdl-barra:has(.hcdl-administracion:focus-visible) .hcdl-extremo-final {
+  .hcdl-barra:has(.hcdl-enlace-final:is(:hover, :focus-visible)) .hcdl-extremo-final {
     background-color: var(--hcdl-orange);
   }
 }

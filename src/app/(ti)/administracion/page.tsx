@@ -119,7 +119,6 @@ function datosRecurso(registro: Registro, sectorId?: number | null) {
   return {
     id: registro.id || null, categoria, nombre: registro.nombre, tipo: registro.tipo, marca: registro.marca,
     serie: registro.serie, estado: registro.estado, sectorId, ficha, claveWeb: registro.claveWeb,
-    ...(registro.id === 0 ? { visible: registro.visible } : {}),
   };
 }
 
@@ -415,8 +414,6 @@ export default function AdministracionPage() {
     }
 
     const alta = dialogo.accion === "Agregar";
-    const visibilidadInicial = alta ? { visible: datos.get("visibleInicial") !== "no" } : {};
-    if (alta) registro.visible = visibilidadInicial.visible ?? true;
     const campos = registro.categoria === "Equipos" ? camposEquipo :
       registro.categoria === "Móviles" ? camposMovil :
         registro.categoria === "Periféricos" ? (["nombre", "modelo", "marca", "tipo", "serie"] as const) :
@@ -424,13 +421,13 @@ export default function AdministracionPage() {
             registro.categoria === "Suministros" ? (["nombre", "marca", "tipo", "stock", "descripcion"] as const) :
               registro.categoria === "IoT" ? camposIoT : camposDe(registro.categoria);
     for (const campo of campos) {
-      if (campo !== "usuario") registro[campo] = String(datos.get(campo) ?? "").trim();
+      if (campo !== "usuario" && !(alta && campo === "estado")) registro[campo] = String(datos.get(campo) ?? "").trim();
     }
     if (registro.categoria === "IoT") {
       registro.area = String(datos.get("area") ?? "");
       registro.ubicacion = String(datos.get("ubicacion") ?? "").trim();
-      if (!registro.tipo || !registro.estado) {
-        setError("Selecciona el tipo y el estado del dispositivo.");
+      if (!registro.tipo || (!alta && !registro.estado)) {
+        setError(alta ? "Selecciona el tipo del dispositivo." : "Selecciona el tipo y el estado del dispositivo.");
         return;
       }
     }
@@ -447,11 +444,6 @@ export default function AdministracionPage() {
     }
     if (registro.categoria === "Periféricos") {
       if (!registro.tipo) { setError("Ingresa el tipo de periférico."); return; }
-      registro.estado = String(datos.get("estado") ?? "Disponible");
-      if (!estadosSinUsuario().includes(registro.estado)) {
-        setError("Selecciona un estado válido para el periférico sin usuario.");
-        return;
-      }
     }
     if (registro.categoria === "Impresoras") {
       registro.tipo = registro.tipo || "Impresora";
@@ -466,7 +458,7 @@ export default function AdministracionPage() {
     if (registro.categoria === "Móviles" && dialogo.accion === "Agregar") {
       registro.tipo = "Teléfono";
     }
-    if (registro.categoria === "Equipos" || registro.categoria === "Móviles") {
+    if (!alta && (registro.categoria === "Equipos" || registro.categoria === "Móviles")) {
       registro.estado = tieneUsuario(registro) ? "Asignado" : String(datos.get("estado") ?? "Disponible");
       if (!tieneUsuario(registro) && !estadosSinUsuario(dialogo.registro.estado).includes(registro.estado)) {
         setError("Selecciona un estado válido para el recurso sin usuario.");
@@ -493,13 +485,14 @@ export default function AdministracionPage() {
         }
       }
       void persistir({ operacion: "guardarUsuario", id: registro.id || null, nombre: registro.nombre,
-        cargo: registro.cargo, correo: registro.correo, sectorId, activo: registro.estado !== "Inactivo",
-        ...visibilidadInicial, ...(contrasena ? { contrasena } : {}) },
+        cargo: registro.cargo, correo: registro.correo, sectorId,
+        ...(!alta ? { activo: registro.estado !== "Inactivo" } : {}),
+        ...(contrasena ? { contrasena } : {}) },
         "Usuario guardado.");
     } else if (registro.categoria === "Suministros") {
       void persistir({ operacion: "guardarSuministro", id: registro.id || null, nombre: registro.nombre,
         tipo: registro.tipo, marca: registro.marca, descripcion: registro.descripcion, stock: Number(registro.stock),
-        stockMinimo: registro.stockMinimo, ...visibilidadInicial }, "Suministro guardado.");
+        stockMinimo: registro.stockMinimo }, "Suministro guardado.");
     } else {
       void persistir({ operacion: "guardarRecursos",
         recursos: [datosRecurso(registro, registro.categoria === "Impresoras" || registro.categoria === "IoT" ? sectorId ?? null : undefined)] },
@@ -849,7 +842,6 @@ function ModalEquipo({ dialogo, cerrar, guardar, error }: {
         <form onSubmit={guardar} className="grid gap-3">
           <section aria-label="Datos del equipo" className="grid gap-2 rounded-lg border border-[#9ccbd4] bg-[#c7e1e6] [--borde-campo:#9ccbd4] [--texto-campo:#006681] p-3 text-[#00546a] sm:grid-cols-2">
             {campo("nombre")}{campo("modelo")}{campo("marca")}{campo("tipo")}{campo("nombreSistema")}
-            {accion === "Agregar" && <CampoVisibilidadInicial />}
             {accion === "Editar" && <label className={etiquetaCampo}>
               Usuario asignado
               <input className={entrada} value={registro.usuario || "Sin asignar"} readOnly />
@@ -858,7 +850,7 @@ function ModalEquipo({ dialogo, cerrar, guardar, error }: {
           {bloques}
           <div className="grid gap-2 rounded-lg border border-[#9ccbd4] bg-[#c7e1e6] [--borde-campo:#9ccbd4] [--texto-campo:#006681] p-3 text-[#00546a]">
             <div className={filaEstadoFormulario}>
-              {campo("estado")}
+              {accion === "Editar" && campo("estado")}
               <div className="flex shrink-0 flex-nowrap items-center gap-2 whitespace-nowrap">
                 <button type="button" className={azul} onClick={cerrar}>Cancelar</button>
                 <button type="submit" className={azul}>Guardar equipo</button>
@@ -970,7 +962,6 @@ function ModalMovil({ dialogo, cerrar, guardar, error }: {
             {icono}
             <div className="grid min-w-0 flex-1 gap-2 md:grid-cols-2">
               {campo("nombre")}{campo("marca")}
-              {accion === "Agregar" && <CampoVisibilidadInicial />}
               {editar && (
                 <>
                   <CampoUsuarioAsignado registro={registro} />
@@ -982,7 +973,7 @@ function ModalMovil({ dialogo, cerrar, guardar, error }: {
           <div className="grid gap-3 md:grid-cols-2">
             <section className={panel}>{campo("accesorio")}</section>
             <div className={franja + " grid gap-2"}>
-              <CampoEstadoRecurso registro={registro} />
+              {editar && <CampoEstadoRecurso registro={registro} />}
               <div className="flex flex-wrap justify-end gap-2">
                 <button type="button" className={azul} onClick={cerrar}>Cancelar</button>
                 <button className={azul}>Guardar móvil</button>
@@ -1066,8 +1057,6 @@ function ModalPeriferico({ dialogo, grupo, cerrar, guardar, error }: {
               {campo("Marca", "marca", "", false)}
               {campo("Tipo de periférico", "tipo", "", true)}
               {campo("Número de serie", "serie", "", false)}
-              <CampoEstadoRecurso registro={registro} />
-              <CampoVisibilidadInicial />
             </div>
           </div>
         ) : (
@@ -1211,15 +1200,14 @@ function ModalImpresora({ dialogo, sectores, cerrar, guardar, error }: {
             {campo("Modelo", "nombre", registro.nombre, "text", true)}
             {campo("Marca", "marca", registro.marca)}
             <CampoSector sectores={sectores} valor={registro.area} />
-            {accion === "Agregar" && <CampoVisibilidadInicial />}
           </div>
           <div className="grid gap-3 md:grid-cols-2">{web}{identificadores}</div>
           <div className={franja + " flex flex-wrap items-end justify-between gap-3"}>
-            <label className={etiquetaCampo}>Estado
+            {accion === "Editar" && <label className={etiquetaCampo}>Estado
               <select name="estado" className={entrada} defaultValue={registro.estado || "Activa"}>
                 {estados.map((estado) => <option key={estado}>{estado}</option>)}
               </select>
-            </label>
+            </label>}
             <div className="flex flex-wrap gap-2">
               <button type="button" className={azul + " gap-2"} onClick={cerrar}><IconoAdmin tipo="volver" />Cancelar</button>
               <button className={azul + " gap-2"}><IconoAdmin tipo="guardar" />Guardar</button>
@@ -1414,7 +1402,6 @@ function ModalGestionSuministro({ dialogo, impresoras, cerrar, guardar, error }:
                 <option>Tóner</option><option>Tinta</option><option>Tambor</option>
               </select>
             </label>
-            {accion === "Agregar" && <CampoVisibilidadInicial />}
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             <section className={panel}>
@@ -1527,10 +1514,9 @@ function ModalIoT({ dialogo, sectores, cerrar, guardar, error }: {
               Ubicación (opcional)
               <input name="ubicacion" className={entrada} defaultValue={registro.ubicacion} maxLength={160} />
             </label>
-            {accion === "Agregar" && <CampoVisibilidadInicial />}
           </div>
           <div className={franja + " " + filaEstadoFormulario}>
-            {campo("estado")}
+            {editar && campo("estado")}
             <div className="flex flex-wrap justify-end gap-2">
               <button type="button" className={azul + " gap-2"} onClick={cerrar}><IconoAdmin tipo="volver" />Cancelar</button>
               <button className={azul + " gap-2"}><IconoAdmin tipo="guardar" />Guardar</button>
@@ -1552,18 +1538,6 @@ function CampoSector({ sectores, valor, requerido = false }: {
       <select name="area" className={entrada} defaultValue={valor ?? ""} required={requerido}>
         <option value="">{requerido ? "Selecciona un sector" : "Sin sector asignado"}</option>
         {sectores.map((sector) => <option key={sector}>{sector}</option>)}
-      </select>
-    </label>
-  );
-}
-
-function CampoVisibilidadInicial() {
-  return (
-    <label className={etiquetaCampo}>
-      Visibilidad inicial
-      <select name="visibleInicial" className={entrada} defaultValue="si">
-        <option value="si">Visible</option>
-        <option value="no">Oculto</option>
       </select>
     </label>
   );
@@ -1810,18 +1784,17 @@ function ModalUsuario({ dialogo, recursos, sectores, puedeRestablecer, cerrar, g
         <form method="post" onSubmit={guardar} className="grid gap-2">
           <div className={franja + " grid gap-2 sm:grid-cols-2"}>
             {campo("nombre")}<CampoSector sectores={sectores} valor={registro.area} requerido />
-            {accion === "Agregar" && <CampoVisibilidadInicial />}
           </div>
           <div className={panel + " grid gap-2 sm:grid-cols-2"}>{campo("cargo")}{campo("correo")}</div>
           {accion === "Agregar" && puedeRestablecer && (
             <ContrasenaInicial />
           )}
           <div className={franja + " " + filaEstadoFormulario}>
-            <label className={etiquetaCampo}>Estado
+            {editar && <label className={etiquetaCampo}>Estado
               <select name="estado" className={entrada} defaultValue={registro.estado || "Activo"}>
                 <option>Activo</option><option>Inactivo</option>
               </select>
-            </label>
+            </label>}
             {botones("Guardar usuario")}
           </div>
           {error && <p role="alert">{error}</p>}
