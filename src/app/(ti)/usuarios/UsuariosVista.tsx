@@ -183,7 +183,6 @@ export default function UsuariosVista({ inicial = "usuarios" }: { inicial?: "usu
 
   return (
     <main className="flex h-[calc(100dvh-60px)] min-h-0 w-full min-w-0 flex-col overflow-hidden bg-[#EFEADC] text-sm">
-      <EstadoCatalogo cargando={cargando} error={error} reintentar={recargar} />
       <h1 className="sr-only">Usuarios y Sectores</h1>
 
         <nav
@@ -304,6 +303,8 @@ export default function UsuariosVista({ inicial = "usuarios" }: { inicial?: "usu
             </button>
           </div>
         </form>
+
+        <EstadoCatalogo cargando={cargando} error={error} reintentar={recargar} />
 
         <section
           aria-label={vista === "usuarios" ? "Usuarios" : "Sectores"}

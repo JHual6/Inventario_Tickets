@@ -256,7 +256,8 @@ export async function exportarFichaUsuario(
 
             @page {
               size: A4 landscape;
-              margin: 10mm;
+              /* Sin espacio vertical para los textos automáticos del navegador. */
+              margin: 0 10mm;
             }
 
             body {
@@ -430,6 +431,9 @@ export async function exportarFichaUsuario(
 
               .documento {
                 max-width: none;
+                padding-block: 10mm;
+                -webkit-box-decoration-break: clone;
+                box-decoration-break: clone;
               }
 
               /* Flujo de impresión más estable entre páginas. */

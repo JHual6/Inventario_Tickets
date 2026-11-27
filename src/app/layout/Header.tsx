@@ -79,13 +79,11 @@ function coincide(ruta: string) {
     setMenuAbiertoEn(null);
   }
 
-  const primeraActiva = colaborador && coincide(enlaces[0].base);
-  const ultimaActiva = coincide(enlaces[enlaces.length - 1].base);
   const estiloEnlace =
     "flex items-center justify-center px-4 text-sm font-medium " +
     "transition-colors hover:bg-accent hover:text-ink " +
     "focus-visible:outline-2 focus-visible:-outline-offset-4 " +
-    "focus-visible:outline-surface lg:focus-visible:bg-accent lg:focus-visible:text-ink";
+    "focus-visible:outline-surface";
 
   return (
     <header
@@ -95,9 +93,10 @@ function coincide(ruta: string) {
       }}
     >
       <div className="bg-brand text-surface">
-        <div className="hcdl-barra flex h-[60px] items-center">
+        <div className="group/barra flex h-[60px] items-center">
           {/* Archivo: public/logo.png */}
-          <div className={`hcdl-extremo-inicio flex h-full shrink-0 items-center px-3 transition-colors ${primeraActiva ? "" : ""}`}>
+          <div className={`hcdl-extremo-inicio flex h-full shrink-0 items-center px-3 transition-colors
+            lg:[@media(hover:hover)]:group-has-[.hcdl-enlace-inicio:hover]/barra:bg-accent`}>
             <Link
               href="/"
               onClick={cerrarMenu}
@@ -129,8 +128,7 @@ function coincide(ruta: string) {
                   href={enlace.href}
                   aria-current={activo ? "page" : undefined}
                   className={`${estiloEnlace} flex-1 whitespace-nowrap
-                    ${primero ? "hcdl-enlace-inicio" : ""} ${ultimo ? "hcdl-enlace-final" : ""}
-                    ${activo && (colaborador || ultimo) ? "" : ""}`}
+                    ${primero ? "hcdl-enlace-inicio" : ""} ${ultimo ? "hcdl-enlace-final" : ""}`}
                 >
                   {enlace.nombre}
                 </Link>
@@ -138,7 +136,8 @@ function coincide(ruta: string) {
             })}
           </nav>
 
-          <div className={`hcdl-extremo-final ml-auto flex h-full shrink-0 items-center gap-3 px-3 transition-colors ${ultimaActiva ? (colaborador ? "" : "bg-accent") : ""}`}>
+          <div className={`hcdl-extremo-final ml-auto flex h-full shrink-0 items-center gap-3 px-3 transition-colors
+            lg:[@media(hover:hover)]:group-has-[.hcdl-enlace-final:hover]/barra:bg-accent`}>
             <CerrarSesion soloIcono />
 
             {/* Botón de menú móvil */}
@@ -184,7 +183,7 @@ function coincide(ruta: string) {
               href={enlace.href}
               onClick={cerrarMenu}
               aria-current={coincide(enlace.base) ? "page" : undefined}
-              className={`${estiloEnlace} min-h-12 justify-start ${colaborador && coincide(enlace.base) ? "bg-brand-dark" : ""}`}
+              className={`${estiloEnlace} min-h-12 justify-start`}
             >
               {enlace.nombre}
             </Link>

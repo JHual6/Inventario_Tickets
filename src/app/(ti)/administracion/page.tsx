@@ -372,7 +372,13 @@ export default function AdministracionPage() {
       cambios.set(item.id, { ...item, marca, modelo, serie, estado });
     }
     void persistir({ operacion: "guardarRecursos",
-      recursos: [...cambios.values()].map((item) => datosRecurso(item)) }, "Periféricos guardados.");
+      recursos: [...cambios.values()].map((item) => datosRecurso(item,
+        !tieneUsuario(item) ? sectorDelFormulario(datos) : undefined)) }, "Periféricos guardados.");
+  }
+
+  function sectorDelFormulario(datos: FormData) {
+    const area = datos.get("area");
+    return area === null ? undefined : catalogo.sectores.find((sector) => sector.nombre === area)?.id ?? null;
   }
 
   function guardar(evento: FormEvent<HTMLFormElement>) {
@@ -424,7 +430,6 @@ export default function AdministracionPage() {
       if (campo !== "usuario" && !(alta && campo === "estado")) registro[campo] = String(datos.get(campo) ?? "").trim();
     }
     if (registro.categoria === "IoT") {
-      registro.area = String(datos.get("area") ?? "");
       registro.ubicacion = String(datos.get("ubicacion") ?? "").trim();
       if (!registro.tipo || (!alta && !registro.estado)) {
         setError(alta ? "Selecciona el tipo del dispositivo." : "Selecciona el tipo y el estado del dispositivo.");
@@ -473,7 +478,7 @@ export default function AdministracionPage() {
       setError("Ese correo ya está registrado."); return;
     }
 
-    const sectorId = catalogo.sectores.find((s) => s.nombre === registro.area)?.id;
+    const sectorId = sectorDelFormulario(datos);
     if (registro.categoria === "Usuarios") {
       if (!sectorId) { setError("Selecciona un sector válido."); return; }
       const contrasena = alta && puedeRestablecer ? String(datos.get("contrasenaInicial") ?? "") : "";
@@ -495,7 +500,7 @@ export default function AdministracionPage() {
         stockMinimo: registro.stockMinimo }, "Suministro guardado.");
     } else {
       void persistir({ operacion: "guardarRecursos",
-        recursos: [datosRecurso(registro, registro.categoria === "Impresoras" || registro.categoria === "IoT" ? sectorId ?? null : undefined)] },
+        recursos: [datosRecurso(registro, sectorId)] },
         "Recurso guardado.");
     }
   }
@@ -552,7 +557,6 @@ export default function AdministracionPage() {
         </nav>
 
         <div className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col gap-3 px-3 py-3 sm:px-5">
-          <EstadoCatalogo cargando={cargando} error={errorCatalogo} reintentar={recargar} />
           {mensaje && <p role="status" className="rounded-md border border-[#d7d1bf] bg-[#f3f1eb] px-3 py-2">{mensaje}</p>}
 
           <div role="group" aria-label="Filtros del listado"
@@ -586,6 +590,8 @@ export default function AdministracionPage() {
               Limpiar filtros
             </button>
           </div>
+
+          <EstadoCatalogo cargando={cargando} error={errorCatalogo} reintentar={recargar} />
 
           {filtrados.length === 0 ? <p className="rounded-md bg-[#f3f1eb] p-3">No se encontraron registros.</p> : (
             <>
@@ -641,11 +647,11 @@ export default function AdministracionPage() {
       </div>
 
       {dialogo && (dialogo.registro.categoria === "Equipos" ? (
-        <ModalEquipo dialogo={dialogo} cerrar={() => setDialogo(null)} guardar={guardar} error={error} />
+        <ModalEquipo dialogo={dialogo} sectores={sectores} cerrar={() => setDialogo(null)} guardar={guardar} error={error} />
       ) : dialogo.registro.categoria === "Móviles" ? (
-        <ModalMovil dialogo={dialogo} cerrar={() => setDialogo(null)} guardar={guardar} error={error} />
+        <ModalMovil dialogo={dialogo} sectores={sectores} cerrar={() => setDialogo(null)} guardar={guardar} error={error} />
       ) : dialogo.registro.categoria === "Periféricos" ? (
-        <ModalPeriferico dialogo={dialogo} grupo={grupoPerifericos(dialogo.registro)}
+        <ModalPeriferico dialogo={dialogo} sectores={sectores} grupo={grupoPerifericos(dialogo.registro)}
           cerrar={() => setDialogo(null)} guardar={guardar} error={error} />
       ) : dialogo.registro.categoria === "Impresoras" ? (
         dialogo.accion === "Suministro" ? (
@@ -741,8 +747,9 @@ function Paginacion({ pagina, total, cambiar }: { pagina: number; total: number;
   );
 }
 
-function ModalEquipo({ dialogo, cerrar, guardar, error }: {
+function ModalEquipo({ dialogo, sectores, cerrar, guardar, error }: {
   dialogo: Dialogo;
+  sectores: string[];
   cerrar: () => void;
   guardar: (evento: FormEvent<HTMLFormElement>) => void;
   error: string;
@@ -842,6 +849,7 @@ function ModalEquipo({ dialogo, cerrar, guardar, error }: {
         <form onSubmit={guardar} className="grid gap-3">
           <section aria-label="Datos del equipo" className="grid gap-2 rounded-lg border border-[#9ccbd4] bg-[#c7e1e6] [--borde-campo:#9ccbd4] [--texto-campo:#006681] p-3 text-[#00546a] sm:grid-cols-2">
             {campo("nombre")}{campo("modelo")}{campo("marca")}{campo("tipo")}{campo("nombreSistema")}
+            {!tieneUsuario(registro) && <CampoSector sectores={sectores} valor={registro.area} />}
             {accion === "Editar" && <label className={etiquetaCampo}>
               Usuario asignado
               <input className={entrada} value={registro.usuario || "Sin asignar"} readOnly />
@@ -864,8 +872,9 @@ function ModalEquipo({ dialogo, cerrar, guardar, error }: {
   );
 }
 
-function ModalMovil({ dialogo, cerrar, guardar, error }: {
+function ModalMovil({ dialogo, sectores, cerrar, guardar, error }: {
   dialogo: Dialogo;
+  sectores: string[];
   cerrar: () => void;
   guardar: (evento: FormEvent<HTMLFormElement>) => void;
   error: string;
@@ -962,11 +971,8 @@ function ModalMovil({ dialogo, cerrar, guardar, error }: {
             {icono}
             <div className="grid min-w-0 flex-1 gap-2 md:grid-cols-2">
               {campo("nombre")}{campo("marca")}
-              {editar && (
-                <>
-                  <CampoUsuarioAsignado registro={registro} />
-                </>
-              )}
+              {!tieneUsuario(registro) && <CampoSector sectores={sectores} valor={registro.area} />}
+              {editar && <CampoUsuarioAsignado registro={registro} />}
             </div>
           </section>
           {bloques}
@@ -995,8 +1001,9 @@ function iconoPeriferico(tipo = ""): keyof typeof iconosAdmin {
   return "hardware";
 }
 
-function ModalPeriferico({ dialogo, grupo, cerrar, guardar, error }: {
+function ModalPeriferico({ dialogo, sectores, grupo, cerrar, guardar, error }: {
   dialogo: Dialogo;
+  sectores: string[];
   grupo: Registro[];
   cerrar: () => void;
   guardar: (evento: FormEvent<HTMLFormElement>) => void;
@@ -1057,6 +1064,7 @@ function ModalPeriferico({ dialogo, grupo, cerrar, guardar, error }: {
               {campo("Marca", "marca", "", false)}
               {campo("Tipo de periférico", "tipo", "", true)}
               {campo("Número de serie", "serie", "", false)}
+              <CampoSector sectores={sectores} valor={registro.area} />
             </div>
           </div>
         ) : (
@@ -1080,6 +1088,7 @@ function ModalPeriferico({ dialogo, grupo, cerrar, guardar, error }: {
                     {campo("Modelo", "modelo-" + item.id, item.modelo || item.nombre, true)}
                     {campo("Número de serie", "serie-" + item.id, item.serie)}
                     <CampoEstadoRecurso registro={item} nombre={"estado-" + item.id} />
+                    {!tieneUsuario(item) && <CampoSector sectores={sectores} valor={item.area} />}
                   </div>
                 </fieldset>
               ))}

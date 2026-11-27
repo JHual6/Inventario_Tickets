@@ -27,6 +27,8 @@ type Recurso = {
   tipo: string;
   usuarioId: number | null;
   sector: string;
+  sectorId: number | null;
+  otroSector: boolean;
 };
 
 type Actualizacion = {
@@ -86,6 +88,7 @@ function adaptarRecurso(recurso: RecursoApi): Recurso {
   return {
     id: recurso.id, nombre: recurso.nombre ?? "", serie: recurso.serie ?? "",
     tipo: recurso.tipo ?? "Sin tipo", sector: recurso.sector ?? "", usuarioId: recurso.usuarioId ?? null,
+    sectorId: recurso.sectorId ?? null, otroSector: recurso.otroSector ?? false,
   };
 }
 
@@ -174,7 +177,7 @@ export default function TicketsHcdl({ esTI, nuevo = false, creado, verResueltos 
     const controlador = new AbortController();
     Promise.all([
       esTI ? listarHcdl<Usuario>("usuarios", controlador.signal) : [],
-      esTI || nuevo ? listarHcdl<RecursoApi>("recursos", controlador.signal) : [],
+      esTI || nuevo ? listarHcdl<RecursoApi>(esTI ? "recursos" : "tickets/recursos", controlador.signal) : [],
       esTI ? listarHcdl<Tecnico>("tecnicos", controlador.signal) : [],
     ]).then(([usuarios, recursos, tecnicos]) => {
       if (controlador.signal.aborted) return;
@@ -1170,24 +1173,37 @@ function FormularioTicket({
   const [seleccionados, setSeleccionados] = useState<number[]>([]);
   const [buscarRecurso, setBuscarRecurso] = useState("");
   const [todosLosRecursos, setTodosLosRecursos] = useState(false);
+  const [sectorReporte, setSectorReporte] = useState("mi-sector");
 
   const usuario = usuarios.find(
     (item) => item.id === Number(usuarioId),
   );
 
+  const otrosSectores = new Map<number, string>();
+  if (!esTI) {
+    for (const recurso of recursos) {
+      if (recurso.otroSector && recurso.sectorId !== null) {
+        otrosSectores.set(recurso.sectorId, recurso.sector);
+      }
+    }
+  }
+  const sectoresOrdenados = [...otrosSectores].sort((a, b) => a[1].localeCompare(b[1], "es-CL"));
+  const textoBusqueda = normalizar(buscarRecurso.trim());
   const disponibles = recursos.filter((recurso) => {
-    const accesible =
-      !esTI || todosLosRecursos ||
-      recurso.usuarioId === usuario?.id ||
-      (recurso.usuarioId === null &&
-        recurso.sector === usuario?.sector);
-
-    return (
-      accesible &&
-      normalizar(
-        `${recurso.nombre} ${recurso.serie} ${recurso.tipo}`,
-      ).includes(normalizar(buscarRecurso))
-    );
+    if (esTI && !todosLosRecursos) {
+      const propio = recurso.usuarioId === usuario?.id;
+      const delSector = recurso.usuarioId === null && recurso.sector === usuario?.sector;
+      if (!propio && !delSector) return false;
+    }
+    if (!esTI) {
+      if (sectorReporte === "mi-sector" && recurso.otroSector) return false;
+      if (sectorReporte !== "mi-sector" && !recurso.otroSector) return false;
+      if (sectorReporte !== "mi-sector" && sectorReporte !== "otros" &&
+          String(recurso.sectorId) !== sectorReporte) return false;
+    }
+    return normalizar(
+      `${recurso.nombre} ${recurso.serie} ${recurso.tipo} ${recurso.sector}`,
+    ).includes(textoBusqueda);
   });
 
   const recursosElegidos = recursos.filter((recurso) =>
@@ -1308,7 +1324,7 @@ function FormularioTicket({
       </BloqueFormulario>
 
       {(!esTI || usuario) && (
-        <BloqueFormulario numero={esTI ? "3" : "2"} titulo={esTI ? "Recursos relacionados" : "Equipo relacionado (opcional)"}>
+        <BloqueFormulario numero={esTI ? "3" : "2"} titulo={esTI ? "Recursos relacionados" : "Recurso relacionado (opcional)"}>
           <div className="space-y-3">
             {esTI && <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-[#61453F]">
               <input
@@ -1322,15 +1338,35 @@ function FormularioTicket({
               Buscar en todo el inventario
             </label>}
 
-            <CampoBusqueda
-              aria-label="Buscar recurso"
-              value={buscarRecurso}
-              onChange={(event) =>
-                setBuscarRecurso(event.target.value)
-              }
-              placeholder="Nombre, tipo o número de serie"
-              className={campoTicket}
-            />
+            <div className="grid items-end gap-3 sm:grid-cols-2">
+              {!esTI && (
+                <label className="text-sm font-semibold text-[#61453F]">
+                  Dónde buscar
+                  <select
+                    value={sectorReporte}
+                    onChange={(event) => setSectorReporte(event.target.value)}
+                    className={campoTicket}
+                  >
+                    <option value="mi-sector">Mis recursos y mi sector</option>
+                    <optgroup label="Otros sectores">
+                      <option value="otros">Todos los otros sectores</option>
+                      {sectoresOrdenados.map(([id, nombre]) => (
+                        <option key={id} value={id}>{nombre}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </label>
+              )}
+              <div className={esTI ? "sm:col-span-2" : undefined}>
+                <CampoBusqueda
+                  aria-label="Buscar recurso"
+                  value={buscarRecurso}
+                  onChange={(event) => setBuscarRecurso(event.target.value)}
+                  placeholder="Nombre, tipo, serie o sector"
+                  className={campoTicket}
+                />
+              </div>
+            </div>
 
             <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
               {disponibles.map((recurso) => {

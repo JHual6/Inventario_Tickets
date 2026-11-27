@@ -254,9 +254,6 @@ export default function PerifericosPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-screen-2xl flex-col px-3 py-3 text-sm text-[#61453F] sm:px-5 xl:h-full xl:min-h-0">
-      <EstadoCatalogo cargando={cargando} error={error} reintentar={recargar} />
-      {filtro.cargando && <p role="status" className="p-2">Buscando coincidencias…</p>}
-      {filtro.error && <p role="alert" className="p-2">{filtro.error}</p>}
       <h1 className="sr-only">Inventario de periféricos</h1>
 
         <section
@@ -354,6 +351,10 @@ export default function PerifericosPage() {
             Limpiar filtros
           </button>
         </section>
+
+        <EstadoCatalogo cargando={cargando} error={error} reintentar={recargar} />
+        {filtro.cargando && <p role="status" className="p-2">Buscando coincidencias…</p>}
+        {filtro.error && <p role="alert" className="p-2">{filtro.error}</p>}
 
       <div className="mt-3 flex flex-col p-2 xl:min-h-0 xl:flex-1">
         {cargando || error ? null : total === 0 ? (

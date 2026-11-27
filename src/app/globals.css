@@ -57,13 +57,3 @@ body {
   background: var(--hcdl-blue-light);
   color: var(--hcdl-blue-dark);
 }
-/* Mismo breakpoint que lg:flex y lg:hidden del Header. */
-@media (min-width: 1024px) {
-  .hcdl-barra:has(.hcdl-enlace-inicio:is(:hover, :focus-visible)) .hcdl-extremo-inicio {
-    background-color: var(--hcdl-orange);
-  }
-
-  .hcdl-barra:has(.hcdl-enlace-final:is(:hover, :focus-visible)) .hcdl-extremo-final {
-    background-color: var(--hcdl-orange);
-  }
-}

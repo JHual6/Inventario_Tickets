@@ -72,6 +72,13 @@ async function buscarRegistro(db, tabla, id) {
   return item;
 }
 
+async function revocarSesionesColaborador(db, usuarioId) {
+  await db.query(`
+    DELETE FROM sesion_cuenta s USING cuenta c
+    WHERE s.cuenta_id = c.id AND c.usuario_id = $1
+  `, [usuarioId]);
+}
+
 async function guardarRecursos(db, _cuenta, entrada) {
   const lote = entrada.recursos;
   exigir(Array.isArray(lote) && lote.length > 0 && lote.length <= 100,
@@ -148,8 +155,11 @@ async function guardarUsuario(db, cuenta, { id, nombre, cargo, correo, sectorId,
   await sectorValido(db, sectorId);
   const valores = [campos[0], campos[1] || null, campos[2] || null, sectorId];
   if (id != null) {
-    await buscarRegistro(db, "usuario", id);
+    const previo = await buscarRegistro(db, "usuario", id);
     await db.query("UPDATE usuario SET nombre=$1,cargo=$2,correo=$3,sector_id=$4,activo=$5 WHERE id=$6", [...valores, activo, id]);
+    if (!activo || texto(previo.correo).toLowerCase() !== campos[2]) {
+      await revocarSesionesColaborador(db, id);
+    }
   } else {
     const { rows: [usuario] } = await db.query(
       "INSERT INTO usuario(nombre,cargo,correo,sector_id) VALUES($1,$2,$3,$4) RETURNING id", valores,
@@ -192,6 +202,7 @@ async function ajustarVisibilidad(db, _cuenta, { clase, id, visible }) {
     exigir(!rowCount, "Desvincula las asignaciones vigentes antes de ocultar el registro.", 409);
   }
   await db.query(`UPDATE ${clase} SET visible=$2 WHERE id=$1`, [id, visible]);
+  if (!visible && clase === "usuario") await revocarSesionesColaborador(db, id);
 }
 
 async function desvincular(db, _cuenta, { id, recursosIds }) {

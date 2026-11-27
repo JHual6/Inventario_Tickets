@@ -79,9 +79,6 @@ export default function MovilesPage() {
 
   return (
     <main className="mx-auto w-full max-w-screen-2xl px-3 py-3 text-sm text-[#61453F] sm:px-5">
-      <EstadoCatalogo cargando={cargando} error={error} reintentar={recargar} />
-      {filtro.cargando && <p role="status" className="p-2">Buscando coincidencias…</p>}
-      {filtro.error && <p role="alert" className="p-2">{filtro.error}</p>}
       <h1 className="sr-only">Inventario de móviles</h1>
 
       <section
@@ -147,6 +144,10 @@ export default function MovilesPage() {
           Limpiar filtros
         </button>
       </section>
+
+      <EstadoCatalogo cargando={cargando} error={error} reintentar={recargar} />
+      {filtro.cargando && <p role="status" className="p-2">Buscando coincidencias…</p>}
+      {filtro.error && <p role="alert" className="p-2">{filtro.error}</p>}
 
       {cargando || error || filtro.cargando || filtro.error ? null : filtrados.length === 0 ? (
         <div className="rounded-lg border border-[#D7D1BF] bg-[#F3F1EB] px-3 py-6 text-center">

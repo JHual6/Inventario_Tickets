@@ -18,7 +18,7 @@ export const cuentasActivas = `
   FROM cuenta c
   LEFT JOIN usuario u ON u.id = c.usuario_id
   LEFT JOIN tecnico t ON t.id = c.tecnico_id
-  WHERE c.activa AND coalesce(u.activo, t.activo)
+  WHERE c.activa AND ((u.activo AND u.visible) OR t.activo)
 `;
 export const buscarCuenta = `
   WITH cuentas AS (${cuentasActivas})
@@ -64,6 +64,17 @@ function tokenSesion(req) {
     .find((valor) => valor.startsWith(cookie + "="));
   const token = entrada?.slice(cookie.length + 1);
   return /^[\w-]{43}$/.test(token ?? "") ? token : null;
+}
+
+async function bloquearColaboradorVigente(db, cuenta) {
+  if (cuenta.rol !== "solicitante") return true;
+  // Administración toma primero el bloqueo de usuario al revocar sus sesiones.
+  const { rowCount } = await db.query(`
+    SELECT id FROM usuario
+    WHERE id = $1 AND activo AND visible AND lower(btrim(correo)) = lower(btrim($2::text))
+    FOR SHARE
+  `, [cuenta.usuarioId, cuenta.correo]);
+  return rowCount === 1;
 }
 
 export async function leerJson(req, res, responder, limite = 16_384) {
@@ -162,6 +173,10 @@ export function crearAutenticacion(db, origen) {
       const cliente = await db.connect();
       try {
         await cliente.query("BEGIN");
+        if (!await bloquearColaboradorVigente(cliente, cuenta)) {
+          await cliente.query("ROLLBACK");
+          return responder(401, { error: textoInvalido });
+        }
         const { rowCount } = await cliente.query(`
           INSERT INTO sesion_cuenta (huella, cuenta_id, vence_en)
           SELECT $1, id, now() + $3::integer * interval '1 second'
@@ -210,6 +225,10 @@ export function crearAutenticacion(db, origen) {
       const cliente = await db.connect();
       try {
         await cliente.query("BEGIN");
+        if (!await bloquearColaboradorVigente(cliente, cuenta)) {
+          await cliente.query("ROLLBACK");
+          return responder(401, { error: "La sesión cambió o expiró. Vuelve a iniciar sesión." });
+        }
         const { rowCount } = await cliente.query(`
           UPDATE cuenta c SET contrasena_hash=$1, cambio_inicial_pendiente=false
           FROM usuario u

@@ -1,6 +1,6 @@
 import { urlHcdl } from "@/lib/sesion-hcdl";
 
-const rutas = /^(sesion|salud|gestion|usuarios|sectores|suministros|recursos|asignaciones|tecnicos|equipos|tickets|(?:equipos|recursos|suministros)\/[1-9]\d{0,9}\/historial|asignaciones\/[1-9]\d{0,9}|(?:impresoras|suministros)\/[1-9]\d{0,9}\/compatibles|tickets\/[1-9]\d{0,9}\/(estado|tecnico|gestion))$/;
+const rutas = /^(sesion|salud|gestion|usuarios|sectores|suministros|recursos|asignaciones|tecnicos|equipos|tickets|tickets\/recursos|(?:equipos|recursos|suministros)\/[1-9]\d{0,9}\/historial|asignaciones\/[1-9]\d{0,9}|(?:impresoras|suministros)\/[1-9]\d{0,9}\/compatibles|tickets\/[1-9]\d{0,9}\/(estado|tecnico|gestion))$/;
 type Contexto = { params: Promise<{ ruta: string[] }> };
 
 async function reenviar(req: Request, { params }: Contexto) {

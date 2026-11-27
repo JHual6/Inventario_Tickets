@@ -353,7 +353,8 @@ export async function exportarActaEntrega(
 
             @page {
               size: A4 portrait;
-              margin: 13mm;
+              /* Sin espacio vertical para los textos automáticos del navegador. */
+              margin: 0 13mm;
             }
 
             body {
@@ -547,6 +548,12 @@ export async function exportarActaEntrega(
             @media print {
               .acciones {
                 display: none;
+              }
+
+              .acta {
+                padding-block: 13mm;
+                -webkit-box-decoration-break: clone;
+                box-decoration-break: clone;
               }
             }
           </style>

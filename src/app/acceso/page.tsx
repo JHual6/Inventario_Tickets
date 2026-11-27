@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useState, type FormEvent } from "react";
 import { enviarHcdl, mensajeHcdl } from "@/lib/api-hcdl";
+import { botonAcceso, campoAcceso, CampoClaveAcceso, ErrorAcceso, TarjetaAcceso } from "./TarjetaAcceso";
 
 export default function AccesoPage() {
   const [error, setError] = useState("");
@@ -10,6 +10,7 @@ export default function AccesoPage() {
 
   async function acceder(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
+    if (enviando) return;
     const formulario = evento.currentTarget;
     setError("");
     setEnviando(true);
@@ -30,30 +31,24 @@ export default function AccesoPage() {
   }
 
   return (
-    <main className="grid min-h-0 flex-1 place-items-center overflow-auto bg-background p-5 text-ink">
-      <section className="w-full max-w-md overflow-hidden rounded-2xl border border-outline bg-surface shadow-sm">
-        <div className="flex items-center gap-4 bg-brand-dark p-5 text-white">
-          <Image src="/logo.png" alt="Hotel Cabaña del Lago" width={62} height={62} className="rounded-full border border-white/70" priority />
-          <div>
-            <p className="text-sm">Hotel Cabaña del Lago</p>
-            <h1 className="text-xl font-bold">Inventario y soporte TI</h1>
-          </div>
+    <TarjetaAcceso titulo="Inventario y soporte TI">
+      <form method="post" onSubmit={acceder} className="grid gap-5 p-5 sm:p-8">
+        <div>
+          <h2 className="text-xl font-bold leading-tight text-brand-dark">Iniciar sesión</h2>
+          <p className="mt-1 text-sm text-ink-muted">Accede con tu cuenta de HCDL.</p>
         </div>
-        <form method="post" onSubmit={acceder} className="grid gap-4 p-5 sm:p-7">
-          <label className="grid gap-1 text-sm font-semibold">Correo
-            <input className="rounded-md border border-outline bg-white p-3" type="email" name="correo"
-              autoComplete="username" maxLength={254} required />
-          </label>
-          <label className="grid gap-1 text-sm font-semibold">Contraseña de HCDL
-            <input className="rounded-md border border-outline bg-white p-3" type="password" name="contrasena"
-              autoComplete="current-password" required />
-          </label>
-          {error && <p role="alert" className="text-sm">{error}</p>}
-          <button disabled={enviando} className="rounded-md bg-brand p-3 font-semibold text-white hover:bg-brand-dark disabled:opacity-60">
-            {enviando ? "Ingresando…" : "Iniciar sesión"}
-          </button>
-        </form>
-      </section>
-    </main>
+        <label className="grid gap-1.5 text-sm font-semibold text-brand-dark">
+          Correo institucional
+          <input className={campoAcceso + " font-normal"} type="email" name="correo" autoComplete="username"
+            autoCapitalize="none" spellCheck={false} maxLength={254} required disabled={enviando} />
+        </label>
+        <CampoClaveAcceso etiqueta="Contraseña de HCDL" nombre="contrasena"
+          autocompletar="current-password" deshabilitado={enviando} />
+        <ErrorAcceso mensaje={error} />
+        <button type="submit" disabled={enviando} className={botonAcceso}>
+          {enviando ? "Ingresando…" : "Iniciar sesión"}
+        </button>
+      </form>
+    </TarjetaAcceso>
   );
 }
