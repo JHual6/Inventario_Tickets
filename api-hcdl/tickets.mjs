@@ -4,6 +4,10 @@ const prioridades = new Set(["Baja", "Media", "Alta"]);
 const estados = new Set(["Pendiente", "En atención", "En espera", "Resuelto"]);
 const limpiar = (valor) => typeof valor === "string" ? valor.trim() : "";
 
+export const recursoReportablePorColaborador = `(
+  r.usuario_id = u.id OR (r.usuario_id IS NULL AND r.sector_actual_id IS NOT NULL)
+)`;
+
 export async function crearTicket(db, auth, cuenta, req, res, responder) {
   if (!auth.mismoOrigen(req)) {
     return responder(403, { error: "Origen no autorizado." });
@@ -38,7 +42,8 @@ export async function crearTicket(db, auth, cuenta, req, res, responder) {
           SELECT 1 FROM unnest($5::integer[]) AS seleccionado(id)
           WHERE NOT EXISTS (
             SELECT 1 FROM recurso_asignacion_vigente r
-            WHERE r.id = seleccionado.id AND r.visible AND ($6::boolean OR r.usuario_id = u.id)
+            WHERE r.id = seleccionado.id AND r.visible
+              AND ($6::boolean OR ${recursoReportablePorColaborador})
           )
         )
       RETURNING id, estado_id
@@ -54,7 +59,7 @@ export async function crearTicket(db, auth, cuenta, req, res, responder) {
   `, [titulo, descripcion, prioridad, usuarioId, recursos, esTI, cuenta.tecnicoId]);
   return rows.length ? responder(201, rows[0]) :
     responder(400, { error: esTI ? "Selecciona un colaborador activo y recursos visibles del inventario."
-      : "Selecciona un recurso de tus asignaciones vigentes." });
+      : "Selecciona uno de tus recursos o un recurso visible de un sector sin asignación vigente." });
 }
 
 export async function cambiarEstado(db, auth, cuenta, id, req, res, responder) {

@@ -1,5 +1,5 @@
 import { catalogoTI, ejecutarGestion } from "./gestion.mjs";
-import { asignarTecnico, cambiarEstado, crearTicket, gestionarTicket } from "./tickets.mjs";
+import { asignarTecnico, cambiarEstado, crearTicket, gestionarTicket, recursoReportablePorColaborador } from "./tickets.mjs";
 
 import { consultarActa, consultarCompatibilidad, historialRecurso, historialSuministro, registrarEntrega, registrarEquipo } from "./inventario.mjs";
 
@@ -13,6 +13,7 @@ function palabrasBusqueda(texto) {
 }
 
 const recursoRuta = "/api/recursos";
+const recursosTicketRuta = "/api/tickets/recursos";
 const soloTI = new Map([
   ["/api/asignaciones", registrarEntrega],
   ["/api/equipos", (db, _cuenta, ...args) => registrarEquipo(db, ...args)],
@@ -61,6 +62,14 @@ const listados = new Map([
           r.ficha->>'imei1', r.ficha->>'imei2')), '${acentos}', '${letras}'),
           palabra) = 0
       )
+  `],
+  [recursosTicketRuta, `
+    SELECT r.id, r.nombre, r.serie, r.tipo, s.nombre AS sector,
+           s.id AS "sectorId", (s.id <> u.sector_id) AS "otroSector"
+    FROM usuario u
+    JOIN recurso_asignacion_vigente r ON ${recursoReportablePorColaborador}
+    JOIN sector s ON s.id = r.sector_actual_id
+    WHERE u.id = $3 AND u.activo AND r.visible
   `],
   ["/api/suministros", `
     SELECT id, nombre, marca, tipo, descripcion, stock, stock_minimo AS "stockMinimo",
@@ -222,7 +231,7 @@ export function crearApi(db, auth) {
         return await ejecutar(db, auth, cuenta, idTicket, req, res, responder);
       }
 
-      if (cuenta.rol === "solicitante" && !["/api/recursos", "/api/tickets"].includes(url.pathname)) {
+      if (cuenta.rol === "solicitante" && ![recursoRuta, "/api/tickets", recursosTicketRuta].includes(url.pathname)) {
         return responder(403, { error: "Esta consulta es exclusiva de TI." });
       }
 
@@ -265,6 +274,7 @@ export function crearApi(db, auth) {
         parametros.push(categoria, cuenta.rol === "solicitante" ? cuenta.usuarioId : null,
           estado, marca, palabrasBusqueda(texto), tipo, sectorRecurso, id, usuarioFiltro);
       }
+      if (url.pathname === recursosTicketRuta) parametros.push(cuenta.usuarioId);
       if (esSuministro) parametros.push(estado, tipo, palabrasBusqueda(texto), id);
       if (esSectores) parametros.push(id, palabrasBusqueda(texto));
       if (esUsuarios) {

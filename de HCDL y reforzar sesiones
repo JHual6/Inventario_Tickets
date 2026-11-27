@@ -1,0 +1,20 @@
+ api-hcdl/acceso.mjs                                | 21 [32m+++++[m[31m-[m
+ api-hcdl/gestion.mjs                               | 13 [32m+++[m[31m-[m
+ next.config.ts                                     | 13 [32m++++[m
+ src/app/(ti)/administracion/page.tsx               | 41 [32m++++++[m[31m-----[m
+ src/app/(ti)/inventario/impresoras/page.tsx        |  7 [32m+[m[31m-[m
+ src/app/(ti)/inventario/iot/page.tsx               |  7 [32m+[m[31m-[m
+ src/app/(ti)/inventario/moviles/page.tsx           |  7 [32m+[m[31m-[m
+ src/app/(ti)/inventario/perifericos/page.tsx       |  7 [32m+[m[31m-[m
+ src/app/(ti)/inventario/suministros/page.tsx       |  7 [32m+[m[31m-[m
+ src/app/(ti)/usuarios/UsuariosVista.tsx            |  3 [32m+[m[31m-[m
+ src/app/acceso/TarjetaAcceso.tsx                   | 71 [32m+++++++++++++++++++[m
+ src/app/acceso/page.tsx                            | 45 [32m++++++[m[31m------[m
+ .../primera-contrasena/FormularioClaveInicial.tsx  | 43 [32m+++++[m[31m-------[m
+ src/app/api/hcdl/[...ruta]/route.ts                |  2 [32m+[m[31m-[m
+ src/app/globals.css                                | 10 [31m---[m
+ src/app/layout/Header.tsx                          | 17 [32m+++[m[31m--[m
+ src/components/TicketsHcdl.tsx                     | 82 [32m++++++++++++++++[m[31m------[m
+ src/lib/exportarActaEntrega.ts                     |  9 [32m++[m[31m-[m
+ src/lib/exportarFichaUsuario.ts                    |  6 [32m+[m[31m-[m
+ 19 files changed, 280 insertions(+), 131 deletions(-)
